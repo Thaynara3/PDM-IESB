@@ -21,7 +21,10 @@ app.get("/categories", async (req, res) => {
     },
   });
 
-  app.post("/categories", async (req, res) => {
+  res.json(categories);
+});
+
+app.post("/categories", async (req, res) => {
   try {
     const { name, displayName, icon, background, isIncome } = req.body;
 
@@ -45,7 +48,55 @@ app.get("/categories", async (req, res) => {
   }
 });
 
-  res.json(categories);
+app.put("/categories/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const category = await prisma.category.update({
+      where: { id },
+      data: req.body,
+    });
+
+    res.json(category);
+  } catch (error) {
+    res.status(400).json({
+      error: "Erro ao atualizar categoria",
+      details: error.message,
+    });
+  }
+});
+
+app.delete("/categories/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const category = await prisma.category.findUnique({
+      where: { id },
+    });
+
+    if (!category) {
+      return res.status(404).json({
+        error: "Categoria não encontrada",
+      });
+    }
+
+    if (category.isDefault) {
+      return res.status(400).json({
+        error: "Categorias padrão não podem ser excluídas",
+      });
+    }
+
+    await prisma.category.delete({
+      where: { id },
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    res.status(400).json({
+      error: "Erro ao excluir categoria",
+      details: error.message,
+    });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
