@@ -1,3 +1,4 @@
+const { z } = require("zod");
 const express = require("express");
 const cors = require("cors");
 const prisma = require("./lib/prisma");
@@ -6,6 +7,13 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+const transactionSchema = z.object({
+  description: z.string().min(1),
+  value: z.number().positive(),
+  date: z.string().min(1),
+  categoryId: z.string().min(1),
+});
 
 app.get("/", (req, res) => {
   res.json({
@@ -94,6 +102,70 @@ app.delete("/categories/:id", async (req, res) => {
   } catch (error) {
     res.status(400).json({
       error: "Erro ao excluir categoria",
+      details: error.message,
+    });
+  }
+});
+
+app.post("/transactions", async (req, res) => {
+  try {
+    const validatedData = transactionSchema.parse(req.body);
+
+    const { description, value, date, categoryId } = validatedData;
+
+    const transaction = await prisma.transaction.create({
+      data: {
+        description,
+        value,
+        date: new Date(date),
+        categoryId,
+      },
+      include: {
+        category: true,
+      },
+    });
+
+    res.status(201).json(transaction);
+  } catch (error) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({
+        error: "Dados inválidos",
+        details: error.issues,
+      });
+    }
+
+    res.status(400).json({
+      error: "Erro ao criar transação",
+      details: error.message,
+    });
+  }
+});
+
+app.get("/transactions", async (req, res) => {
+  const transactions = await prisma.transaction.findMany({
+    include: {
+      category: true,
+    },
+    orderBy: {
+      date: "desc",
+    },
+  });
+
+  res.json(transactions);
+});
+
+app.delete("/transactions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await prisma.transaction.delete({
+      where: { id },
+    });
+
+    res.status(204).send();
+  } catch (error) {
+    res.status(400).json({
+      error: "Erro ao excluir transação",
       details: error.message,
     });
   }
