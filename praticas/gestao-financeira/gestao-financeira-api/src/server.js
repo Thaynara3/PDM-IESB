@@ -171,6 +171,35 @@ app.delete("/transactions/:id", async (req, res) => {
   }
 });
 
+app.put("/transactions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { description, value, date, categoryId } = req.body;
+
+    const data = {};
+
+    if (description !== undefined) data.description = description;
+    if (value !== undefined) data.value = Number(value);
+    if (date !== undefined) data.date = new Date(date);
+    if (categoryId !== undefined) data.categoryId = categoryId;
+
+    const transaction = await prisma.transaction.update({
+      where: { id },
+      data,
+      include: {
+        category: true,
+      },
+    });
+
+    res.json(transaction);
+  } catch (error) {
+    res.status(400).json({
+      error: "Erro ao atualizar transação",
+      details: error.message,
+    });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
