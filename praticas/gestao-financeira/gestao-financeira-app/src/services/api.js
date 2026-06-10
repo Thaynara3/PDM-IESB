@@ -1,4 +1,4 @@
-const BASE_URL = "http://SEU_IP:3000";
+const BASE_URL = "http://192.168.15.138:3000";
 
 export const api = {
   getCategories: async () =>
