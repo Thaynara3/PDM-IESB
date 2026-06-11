@@ -1,62 +1,56 @@
-import { useState, useContext, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Alert,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-} from "react-native";
+import { useState, useContext } from "react";
+import { View, Text, TextInput, Alert, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { Picker } from "@react-native-picker/picker";
+import RNDateTimePicker from "@react-native-community/datetimepicker";
 import { MoneyContext } from "../../src/contexts/GlobalState";
 import { api } from "../../src/services/api";
 import { router } from "expo-router";
 
 export default function AddTransactions() {
   const { categories, loadData } = useContext(MoneyContext);
-
-  const [form, setForm] = useState({
+  
+  const initialForm = {
     description: "",
-    value: "",
-    date: new Date().toISOString().slice(0, 10),
-    categoryId: "",
-  });
+    value: 0,
+    date: new Date(),
+    categoryId: categories.length > 0 ? categories[0].id : ""
+  };
 
-  useEffect(() => {
-    if (categories.length > 0 && !form.categoryId) {
-      setForm((prev) => ({
-        ...prev,
-        categoryId: categories[0].id,
-      }));
+  const [form, setForm] = useState(initialForm);
+  const [showPicker, setShowPicker] = useState(false);
+
+  // Máscara de dinheiro (impede letras e formata)
+  const handleCurrencyChange = (text) => {
+    const formattedValue = text.replace(/\D/g, "");
+    const numberValue = formattedValue ? parseFloat(formattedValue) / 100 : 0;
+    setForm({ ...form, value: numberValue });
+  };
+
+  const handleDateChange = (_, selectDate) => {
+    setShowPicker(false);
+    if (selectDate) {
+      setForm({ ...form, date: selectDate });
     }
-  }, [categories]);
+  };
 
   const handleSave = async () => {
-    if (!form.description || Number(form.value) <= 0 || !form.categoryId) {
-      Alert.alert("Erro", "Preencha descrição, valor e categoria.");
+    if (!form.description || form.value <= 0) {
+      Alert.alert("Erro", "Preencha uma descrição e um valor válido.");
       return;
     }
 
     try {
       await api.createTransaction({
-        description: form.description,
-        value: Number(String(form.value).replace(",", ".")),
-        date: form.date,
-        categoryId: form.categoryId,
+        ...form,
+        date: form.date.toISOString(), // Envia para a API no formato correto
       });
-
-      await loadData();
-
-      setForm({
-        description: "",
-        value: "",
-        date: new Date().toISOString().slice(0, 10),
-        categoryId: categories.length > 0 ? categories[0].id : "",
-      });
-
+      
+      await loadData(); // Recarrega os dados do banco
+      setForm(initialForm); // Limpa o formulário após salvar!
+      
       Alert.alert("Sucesso", "Transação salva!");
       router.push("/(tabs)");
+      
     } catch (error) {
       Alert.alert("Erro", "Não foi possível salvar.");
       console.log(error);
@@ -66,44 +60,46 @@ export default function AddTransactions() {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.label}>Descrição</Text>
-      <TextInput
-        style={styles.input}
+      <TextInput 
+        style={styles.input} 
         value={form.description}
         onChangeText={(text) => setForm({ ...form, description: text })}
-        placeholder="Ex: Mercado"
+        placeholder="Ex: Conta de Luz"
       />
 
       <Text style={styles.label}>Valor</Text>
-      <TextInput
-        style={styles.input}
+      <TextInput 
+        style={styles.input} 
         keyboardType="numeric"
-        value={form.value}
-        onChangeText={(text) => setForm({ ...form, value: text })}
-        placeholder="Ex: 25.50"
+        value={form.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+        onChangeText={handleCurrencyChange}
       />
 
       <Text style={styles.label}>Data</Text>
-      <TextInput
-        style={styles.input}
-        value={form.date}
-        onChangeText={(text) => setForm({ ...form, date: text })}
-        placeholder="2026-04-29"
-      />
+      <TouchableOpacity onPress={() => setShowPicker(true)}>
+        <TextInput
+          style={styles.input}
+          value={form.date.toLocaleDateString("pt-BR")}
+          editable={false}
+        />
+      </TouchableOpacity>
+      {showPicker && (
+        <RNDateTimePicker
+          mode="date"
+          display={Platform.OS === "ios" ? "inline" : "default"}
+          value={form.date}
+          onChange={handleDateChange}
+        />
+      )}
 
-      <Text style={styles.label}>Categoria</Text>
+      <Text style={styles.label}>Categoria (Define se é Renda ou Despesa)</Text>
       <View style={styles.pickerContainer}>
-        <Picker
-          selectedValue={form.categoryId}
-          onValueChange={(itemValue) =>
-            setForm({ ...form, categoryId: itemValue })
-          }
+        <Picker 
+          selectedValue={form.categoryId || (categories.length > 0 ? categories[0].id : "")} 
+          onValueChange={(itemValue) => setForm({ ...form, categoryId: itemValue })}
         >
           {categories.map((cat) => (
-            <Picker.Item
-              key={cat.id}
-              label={cat.displayName}
-              value={cat.id}
-            />
+            <Picker.Item key={cat.id} label={cat.displayName} value={cat.id} />
           ))}
         </Picker>
       </View>
@@ -116,42 +112,10 @@ export default function AddTransactions() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: "#F5F5F5",
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 5,
-    color: "#666",
-    fontWeight: "bold",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#B1B1B1",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 15,
-    backgroundColor: "#FFF",
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: "#B1B1B1",
-    borderRadius: 8,
-    marginBottom: 20,
-    backgroundColor: "#FFF",
-  },
-  button: {
-    backgroundColor: "#37BF81",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
+  container: { flex: 1, padding: 20, backgroundColor: "#F5F5F5" },
+  label: { fontSize: 16, marginBottom: 5, color: "#666", fontWeight: "bold" },
+  input: { borderWidth: 1, borderColor: "#B1B1B1", padding: 12, borderRadius: 8, marginBottom: 15, backgroundColor: "#FFF" },
+  pickerContainer: { borderWidth: 1, borderColor: "#B1B1B1", borderRadius: 8, marginBottom: 20, backgroundColor: "#FFF" },
+  button: { backgroundColor: "#37BF81", padding: 16, borderRadius: 8, alignItems: "center", marginBottom: 40 },
+  buttonText: { color: "#fff", fontWeight: "bold", fontSize: 16 }
 });
